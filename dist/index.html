@@ -24,7 +24,7 @@
       // 从服务器加载Markdown文件
       async function loadMarkdownContent() {
         try {
-          const response = await fetch('/articles/digital-transform.md');
+          const response = await fetch('./articles/digital-transform.md');
           if (!response.ok) {
             throw new Error('Failed to load markdown content');
           }
