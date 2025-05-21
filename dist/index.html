@@ -4,71 +4,83 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>二进制禅堂</title>
+    <!-- 添加 marked.js 库 -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <style>
-      body {
-        font-family: Arial, sans-serif;
-        line-height: 1.6;
-        margin: 0;
-        padding: 0;
-        background-color: #f4f4f9;
-        color: #333;
+      /* ...existing code... */
+      
+      /* Markdown 样式 */
+      .markdown-body {
+        padding: 20px;
+        background: #fff;
+        border-radius: 5px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        margin: 20px 0;
       }
-      header {
-        background: #0078d7;
-        color: #fff;
-        padding: 1rem 0;
-        text-align: center;
+      .markdown-body img {
+        max-width: 100%;
       }
-      main {
-        padding: 2rem;
-        max-width: 800px;
-        margin: 0 auto;
+      .markdown-body code {
+        background-color: #f6f8fa;
+        padding: 2px 4px;
+        border-radius: 3px;
+        font-family: monospace;
       }
-      footer {
-        text-align: center;
-        padding: 1rem 0;
-        background: #333;
-        color: #fff;
-        margin-top: 2rem;
+      .markdown-body pre {
+        background-color: #f6f8fa;
+        padding: 16px;
+        border-radius: 3px;
+        overflow: auto;
       }
-      a {
-        color: #0078d7;
-        text-decoration: none;
+      .markdown-body blockquote {
+        border-left: 4px solid #ddd;
+        padding-left: 16px;
+        margin-left: 0;
+        color: #666;
       }
     </style>
   </head>
   <body>
-    <header>
-      <h1>欢迎来到二进制禅堂</h1>
-      <p>探索数字化转型与 AI 世界的奥秘</p>
-    </header>
+    <!-- ...existing code... -->
     <main>
+      <!-- ...existing code... -->
       <section>
-        <h2>关于我们</h2>
-        <p>
-          “二进制禅堂”是一个学习和交流的平台，致力于帮助更多人理解数字化转型的本质。
-          我们的目标是让更多人走进二进制世界，在 AI 到来时，借助 AI 和代码将现实世界与数字世界建立联系。
-        </p>
-      </section>
-      <section>
-        <h2>内容方向</h2>
-        <ul>
-          <li>数字化转型的实战经验分享</li>
-          <li>传统行业与互联网公司的差异解读</li>
-          <li>电商、物联网、金融等行业的数字化解密</li>
-          <li>AI 应用场景与技术普及</li>
-        </ul>
-      </section>
-      <section>
-        <h2>加入我们</h2>
-        <p>
-          欢迎关注我们的公众号，与我们一起探索数字化的未来！<br>
-          <a href="#">点击这里关注</a>
-        </p>
+        <h2>最新文章</h2>
+        <div id="markdown-content" class="markdown-body">
+          <!-- 这里将显示Markdown内容 -->
+        </div>
       </section>
     </main>
-    <footer>
-      <p>&copy; 2025 二进制禅堂. 保留所有权利。</p>
-    </footer>
+    
+    <script>
+      // 示例Markdown内容
+      const markdownContent = `
+# AI时代的数字化转型
+
+## 为什么需要数字化转型？
+
+在AI快速发展的今天，传统企业面临着前所未有的机遇与挑战。本文将为大家详细解析：
+
+1. 数字化转型的必要性
+2. 如何开启转型之路
+3. AI工具的实践应用
+
+\`\`\`js
+// 示例代码
+function digitalTransform() {
+  console.log("开启数字化转型之路");
+}
+\`\`\`
+
+> 数字化转型不仅仅是技术升级，更是思维方式的革新。
+
+[了解更多](/articles/digital-transform)
+      `;
+
+      // 解析Markdown内容
+      document.getElementById('markdown-content').innerHTML = 
+        marked.parse(markdownContent);
+    </script>
+    <!-- ...existing code... -->
   </body>
 </html>
