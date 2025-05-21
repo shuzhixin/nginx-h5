@@ -8,42 +8,10 @@
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <style>
       /* ...existing code... */
-      
-      /* Markdown 样式 */
-      .markdown-body {
-        padding: 20px;
-        background: #fff;
-        border-radius: 5px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        margin: 20px 0;
-      }
-      .markdown-body img {
-        max-width: 100%;
-      }
-      .markdown-body code {
-        background-color: #f6f8fa;
-        padding: 2px 4px;
-        border-radius: 3px;
-        font-family: monospace;
-      }
-      .markdown-body pre {
-        background-color: #f6f8fa;
-        padding: 16px;
-        border-radius: 3px;
-        overflow: auto;
-      }
-      .markdown-body blockquote {
-        border-left: 4px solid #ddd;
-        padding-left: 16px;
-        margin-left: 0;
-        color: #666;
-      }
     </style>
   </head>
   <body>
-    <!-- ...existing code... -->
     <main>
-      <!-- ...existing code... -->
       <section>
         <h2>最新文章</h2>
         <div id="markdown-content" class="markdown-body">
@@ -53,34 +21,27 @@
     </main>
     
     <script>
-      // 示例Markdown内容
-      const markdownContent = `
-# AI时代的数字化转型
+      // 从服务器加载Markdown文件
+      async function loadMarkdownContent() {
+        try {
+          const response = await fetch('/articles/digital-transform.md');
+          if (!response.ok) {
+            throw new Error('Failed to load markdown content');
+          }
+          const markdownContent = await response.text();
+          
+          // 解析并显示Markdown内容
+          document.getElementById('markdown-content').innerHTML = 
+            marked.parse(markdownContent);
+        } catch (error) {
+          console.error('Error loading markdown:', error);
+          document.getElementById('markdown-content').innerHTML = 
+            '<p>加载文章内容失败，请稍后重试。</p>';
+        }
+      }
 
-## 为什么需要数字化转型？
-
-在AI快速发展的今天，传统企业面临着前所未有的机遇与挑战。本文将为大家详细解析：
-
-1. 数字化转型的必要性
-2. 如何开启转型之路
-3. AI工具的实践应用
-
-\`\`\`js
-// 示例代码
-function digitalTransform() {
-  console.log("开启数字化转型之路");
-}
-\`\`\`
-
-> 数字化转型不仅仅是技术升级，更是思维方式的革新。
-
-[了解更多](/articles/digital-transform)
-      `;
-
-      // 解析Markdown内容
-      document.getElementById('markdown-content').innerHTML = 
-        marked.parse(markdownContent);
+      // 页面加载时执行
+      loadMarkdownContent();
     </script>
-    <!-- ...existing code... -->
   </body>
 </html>
