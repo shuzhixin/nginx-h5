@@ -567,6 +567,47 @@
             
             init();
         });
+
+        // Touch 事件处理类
+        class TouchHandler {
+            constructor(pageManager) {
+                this.pageManager = pageManager;
+                this.startX = 0;
+                this.startY = 0;
+                this.threshold = 50; // 滑动阈值
+                this.init();
+            }
+
+            init() {
+                const content = document.getElementById('markdown-content');
+                
+                content.addEventListener('touchstart', (e) => {
+                    this.startX = e.touches[0].clientX;
+                    this.startY = e.touches[0].clientY;
+                }, { passive: true });
+
+                content.addEventListener('touchend', (e) => {
+                    const endX = e.changedTouches[0].clientX;
+                    const endY = e.changedTouches[0].clientY;
+                    
+                    const diffX = this.startX - endX;
+                    const diffY = Math.abs(this.startY - endY);
+                    
+                    // 确保是水平滑动而不是垂直滚动
+                    if (Math.abs(diffX) > this.threshold && Math.abs(diffX) > diffY) {
+                        e.preventDefault(); // 防止触发其他事件
+                        
+                        if (diffX > 0) {
+                            // 向左滑动，下一页
+                            this.pageManager.showPage(this.pageManager.currentPage + 1);
+                        } else {
+                            // 向右滑动，上一页
+                            this.pageManager.showPage(this.pageManager.currentPage - 1);
+                        }
+                    }
+                }, { passive: true });
+            }
+        }
     </script>
 </body>
 </html>
