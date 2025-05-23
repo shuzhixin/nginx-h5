@@ -267,23 +267,36 @@
                 }
                 
                 const markdownContent = await response.text();
+                const content = document.getElementById('markdown-content');
                 
-                // 解析并显示Markdown内容
-                document.getElementById('markdown-content').innerHTML = marked.parse(markdownContent);
+                // 先显示加载提示
+                content.innerHTML = '<p>正在加载内容...</p>';
+                
+                // 使用 Promise 确保内容渲染完成
+                await new Promise(resolve => {
+                    requestAnimationFrame(() => {
+                        // 解析并显示Markdown内容
+                        content.innerHTML = marked.parse(markdownContent);
+                        
+                        // 更新页面标题
+                        if(!articleTitle){
+                            const titleMatch = markdownContent.match(/^#\s+(.+)$/m);
+                            articleTitle = titleMatch ? titleMatch[1] : '增长思维';
+                        }
+                        if (articleTitle) {
+                            document.title = articleTitle;
+                        }
+                        
+                        // 确保DOM更新完成
+                        requestAnimationFrame(resolve);
+                    });
+                });
 
-                // 更新页面标题
-                if(!articleTitle){
-                    const titleMatch = markdownContent.match(/^#\s+(.+)$/m);
-                    articleTitle = titleMatch ? titleMatch[1] : '增长思维';
-                }
-                if (articleTitle) {
-                    document.title = articleTitle;
-                }
-
-                // 等待内容渲染完成后再初始化阅读器
-                setTimeout(() => {
-                    initReader();
-                }, 500); // 增加到 500ms
+                // 等待一小段时间确保样式应用完成
+                await new Promise(resolve => setTimeout(resolve, 100));
+                
+                // 初始化阅读器
+                await initReader();
 
             } catch (error) {
                 console.error('Error loading markdown:', error);
@@ -319,36 +332,48 @@
                 this.containerHeight = window.innerHeight - 200; // 减去控制栏高度
             }
 
-            initPages() {
-                const container = document.createElement('div');
-                container.className = 'markdown-body';
-                container.style.visibility = 'hidden';
-                container.style.position = 'absolute';
-                container.innerHTML = this.content;
-                document.body.appendChild(container);
+            async initPages(retryCount = 3) {
+                for (let i = 0; i < retryCount; i++) {
+                    try {
+                        const container = document.createElement('div');
+                        container.className = 'markdown-body';
+                        container.style.visibility = 'hidden';
+                        container.style.position = 'absolute';
+                        container.innerHTML = this.content;
+                        document.body.appendChild(container);
 
-                const elements = Array.from(container.children);
-                let currentPage = [];
-                let currentHeight = 0;
+                        const elements = Array.from(container.children);
+                        let currentPage = [];
+                        let currentHeight = 0;
 
-                elements.forEach(element => {
-                    const height = element.offsetHeight;
-                    if (currentHeight + height > this.containerHeight) {
+                        elements.forEach(element => {
+                            const height = element.offsetHeight;
+                            if (currentHeight + height > this.containerHeight) {
+                                if (currentPage.length > 0) {
+                                    this.pages.push(currentPage);
+                                    currentPage = [];
+                                    currentHeight = 0;
+                                }
+                            }
+                            currentPage.push(element.cloneNode(true));
+                            currentHeight += height;
+                        });
+
                         if (currentPage.length > 0) {
                             this.pages.push(currentPage);
-                            currentPage = [];
-                            currentHeight = 0;
                         }
+
+                        document.body.removeChild(container);
+
+                        return; // 成功则返回
+                    } catch (e) {
+                        console.warn(`Init pages attempt ${i + 1} failed:`, e);
+                        // 最后一次尝试失败才抛出错误
+                        if (i === retryCount - 1) throw e;
+                        // 等待一段时间后重试
+                        await new Promise(resolve => setTimeout(resolve, 100 * (i + 1)));
                     }
-                    currentPage.push(element.cloneNode(true));
-                    currentHeight += height;
-                });
-
-                if (currentPage.length > 0) {
-                    this.pages.push(currentPage);
                 }
-
-                document.body.removeChild(container);
             }
 
             showPage(pageNum) {
@@ -460,22 +485,41 @@
         async function initReader() {
             try {
                 const content = document.getElementById('markdown-content');
+                if (!content) {
+                    throw new Error('Content element not found');
+                }
+
                 const htmlContent = content.innerHTML;
+                if (!htmlContent.trim()) {
+                    throw new Error('No content to display');
+                }
                 
                 // 初始化页面管理器
                 window.pageManager = new PageManager(htmlContent);
-                window.pageManager.initPages();
+                
+                // 使用 Promise 包装初始化过程
+                await new Promise((resolve, reject) => {
+                    try {
+                        window.pageManager.initPages();
+                        resolve();
+                    } catch (e) {
+                        reject(e);
+                    }
+                });
                 
                 // 加载上次阅读进度
                 const progress = ReadingProgress.load();
                 const file = getQueryParam('file');
-                if (progress && progress.bookId === file) {
-                    window.pageManager.showPage(progress.page);
-                } else {
+                
+                const showPageResult = progress && progress.bookId === file ? 
+                    window.pageManager.showPage(progress.page) :
                     window.pageManager.showPage(0);
+                    
+                if (!showPageResult) {
+                    throw new Error('Failed to display page');
                 }
 
-                // 绑定翻页事件
+                // 初始化控制器
                 initPageControls();
                 
                 // 添加触摸支持
@@ -483,8 +527,7 @@
 
             } catch (error) {
                 console.error('Error initializing reader:', error);
-                document.getElementById('markdown-content').innerHTML = 
-                    '<p>初始化阅读器失败，请刷新页面重试。</p>';
+                throw error; // 向上传递错误
             }
         }
 
@@ -509,10 +552,20 @@
 
         // 修改页面加载执行顺序
         document.addEventListener('DOMContentLoaded', () => {
-            // 先初始化主题管理
-            ThemeManager.init();
-            // 然后加载内容
-            loadMarkdownContent();
+            const init = async () => {
+                try {
+                    // 先初始化主题管理
+                    ThemeManager.init();
+                    // 然后加载内容
+                    await loadMarkdownContent();
+                } catch (error) {
+                    console.error('Initialization failed:', error);
+                    document.getElementById('markdown-content').innerHTML = 
+                        '<p>初始化失败，请刷新页面重试。<br>错误信息：' + error.message + '</p>';
+                }
+            };
+            
+            init();
         });
     </script>
 </body>
