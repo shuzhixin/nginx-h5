@@ -7,13 +7,41 @@
     <!-- 添加 marked.js 库 -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <style>
+        :root {
+            --bg-color: #fff;
+            --text-color: #333;
+            --link-color: #3498db;
+            --font-size: 16px;
+            --line-height: 1.8;
+        }
+
+        /* 主题样式 */
+        [data-theme="light"] {
+            --bg-color: #fff;
+            --text-color: #333;
+        }
+
+        [data-theme="dark"] {
+            --bg-color: #1a1a1a;
+            --text-color: #eee;
+        }
+
+        [data-theme="sepia"] {
+            --bg-color: #f4ecd8;
+            --text-color: #5b4636;
+        }
+
         body {
             max-width: 800px;
             margin: 0 auto;
             padding: 20px;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-            line-height: 1.6;
+            line-height: var(--line-height);
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            transition: all 0.3s ease;
         }
+
         .nav {
             margin: 20px 0;
             padding: 10px;
@@ -21,7 +49,10 @@
             text-align: center;
         }
         .markdown-body {
-            padding: 20px;
+            font-size: var(--font-size);
+            line-height: 1.8;
+            min-height: calc(100vh - 200px);
+            overflow: hidden;
         }
         h1 {
             text-align: center;
@@ -36,14 +67,93 @@
         code {
             font-family: Consolas, Monaco, 'Courier New', monospace;
         }
+
+        .controls {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 10px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            z-index: 1000;
+        }
+
+        .page-controls {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 20px;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 10px 20px;
+            border-radius: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .page {
+            display: none;
+            min-height: calc(100vh - 200px);
+            padding: 20px;
+        }
+
+        .page.active {
+            display: block;
+        }
+
+        button {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            background: var(--link-color);
+            color: white;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        button:hover {
+            opacity: 0.9;
+        }
+
+        .controls select {
+            padding: 5px;
+            margin: 5px;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+        }
     </style>
 </head>
 <body>
-    <div class="nav">
-        <a href="./增长思维.html">返回目录</a>
+    <!-- 阅读控制面板 -->
+    <div class="controls">
+        <select id="theme-selector">
+            <option value="light">浅色主题</option>
+            <option value="dark">深色主题</option>
+            <option value="sepia">护眼模式</option>
+        </select>
+        <select id="font-size">
+            <option value="14">小号字体</option>
+            <option value="16" selected>默认字体</option>
+            <option value="18">大号字体</option>
+            <option value="20">超大字体</option>
+        </select>
     </div>
+
     <div id="markdown-content" class="markdown-body">
         <!-- 这里将显示Markdown内容 -->
+    </div>
+
+    <!-- 翻页控制 -->
+    <div class="page-controls">
+        <button id="prev-page">上一页</button>
+        <span id="page-info">第 1 页 / 共 1 页</span>
+        <button id="next-page">下一页</button>
     </div>
 
     <script>
@@ -87,8 +197,187 @@
             }
         }
 
+        // 阅读进度管理
+        const ReadingProgress = {
+            save(bookId, chapter, page) {
+                const progress = {
+                    bookId,
+                    chapter,
+                    page,
+                    timestamp: new Date().getTime()
+                };
+                localStorage.setItem('reading-progress', JSON.stringify(progress));
+            },
+
+            load() {
+                const progress = localStorage.getItem('reading-progress');
+                return progress ? JSON.parse(progress) : null;
+            }
+        };
+
+        // 页面管理器
+        class PageManager {
+            constructor(content) {
+                this.content = content;
+                this.pages = [];
+                this.currentPage = 0;
+                this.containerHeight = window.innerHeight - 200; // 减去控制栏高度
+            }
+
+            initPages() {
+                const container = document.createElement('div');
+                container.className = 'markdown-body';
+                container.style.visibility = 'hidden';
+                container.style.position = 'absolute';
+                container.innerHTML = this.content;
+                document.body.appendChild(container);
+
+                const elements = Array.from(container.children);
+                let currentPage = [];
+                let currentHeight = 0;
+
+                elements.forEach(element => {
+                    const height = element.offsetHeight;
+                    if (currentHeight + height > this.containerHeight) {
+                        if (currentPage.length > 0) {
+                            this.pages.push(currentPage);
+                            currentPage = [];
+                            currentHeight = 0;
+                        }
+                    }
+                    currentPage.push(element.cloneNode(true));
+                    currentHeight += height;
+                });
+
+                if (currentPage.length > 0) {
+                    this.pages.push(currentPage);
+                }
+
+                document.body.removeChild(container);
+            }
+
+            showPage(pageNum) {
+                if (pageNum < 0 || pageNum >= this.pages.length) {
+                    return false;
+                }
+
+                const content = document.getElementById('markdown-content');
+                content.innerHTML = '';
+                this.currentPage = pageNum;
+
+                this.pages[pageNum].forEach(element => {
+                    content.appendChild(element.cloneNode(true));
+                });
+
+                document.getElementById('page-info').textContent = 
+                    `第 ${pageNum + 1} 页 / 共 ${this.pages.length} 页`;
+
+                // 更新按钮状态
+                document.getElementById('prev-page').disabled = pageNum === 0;
+                document.getElementById('next-page').disabled = pageNum === this.pages.length - 1;
+
+                // 保存阅读进度
+                const file = getQueryParam('file');
+                ReadingProgress.save(file, '', pageNum);
+
+                return true;
+            }
+        }
+
+        // 主题管理
+        const ThemeManager = {
+            init() {
+                document.getElementById('theme-selector').addEventListener('change', (e) => {
+                    document.body.setAttribute('data-theme', e.target.value);
+                    localStorage.setItem('theme', e.target.value);
+                });
+
+                document.getElementById('font-size').addEventListener('change', (e) => {
+                    const fontSize = e.target.value;
+                    document.documentElement.style.setProperty('--font-size', `${fontSize}px`);
+                    localStorage.setItem('font-size', fontSize);
+                    
+                    // 字体大小改变后重新计算分页
+                    if (window.pageManager) {
+                        const currentPage = window.pageManager.currentPage;
+                        window.pageManager.initPages();
+                        window.pageManager.showPage(currentPage);
+                    }
+                });
+
+                // 恢复上次的设置
+                const savedTheme = localStorage.getItem('theme');
+                const savedFontSize = localStorage.getItem('font-size');
+                
+                if (savedTheme) {
+                    document.body.setAttribute('data-theme', savedTheme);
+                    document.getElementById('theme-selector').value = savedTheme;
+                }
+                
+                if (savedFontSize) {
+                    document.documentElement.style.setProperty('--font-size', `${savedFontSize}px`);
+                    document.getElementById('font-size').value = savedFontSize;
+                }
+            }
+        };
+
+        // 初始化页面
+        async function initReader() {
+            try {
+                const file = getQueryParam('file') || './增长思维/00.md';
+                const response = await fetch(file);
+                
+                if (!response.ok) {
+                    throw new Error('Failed to load markdown content');
+                }
+                
+                const markdownContent = await response.text();
+                const htmlContent = marked.parse(markdownContent);
+                
+                // 初始化页面管理器
+                window.pageManager = new PageManager(htmlContent);
+                window.pageManager.initPages();
+                
+                // 加载上次阅读进度
+                const progress = ReadingProgress.load();
+                if (progress && progress.bookId === file) {
+                    window.pageManager.showPage(progress.page);
+                } else {
+                    window.pageManager.showPage(0);
+                }
+
+                // 绑定翻页事件
+                document.getElementById('prev-page').addEventListener('click', () => {
+                    window.pageManager.showPage(window.pageManager.currentPage - 1);
+                });
+                
+                document.getElementById('next-page').addEventListener('click', () => {
+                    window.pageManager.showPage(window.pageManager.currentPage + 1);
+                });
+
+                // 支持键盘翻页
+                document.addEventListener('keydown', (e) => {
+                    if (e.key === 'ArrowLeft') {
+                        window.pageManager.showPage(window.pageManager.currentPage - 1);
+                    } else if (e.key === 'ArrowRight') {
+                        window.pageManager.showPage(window.pageManager.currentPage + 1);
+                    }
+                });
+
+            } catch (error) {
+                console.error('Error:', error);
+                document.getElementById('markdown-content').innerHTML = 
+                    '<p>加载文章内容失败，请稍后重试。</p>';
+            }
+        }
+
         // 页面加载时执行
         loadMarkdownContent();
+        // 先初始化主题管理
+        ThemeManager.init();
+
+        // 等待 DOM 加载完成后初始化阅读器
+        document.addEventListener('DOMContentLoaded', initReader);
     </script>
 </body>
 </html>
