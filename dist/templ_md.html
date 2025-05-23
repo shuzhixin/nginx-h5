@@ -218,6 +218,19 @@
                 padding-bottom: 40px;
             }
         }
+
+        /* 加载提示和错误提示样式 */
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #666;
+        }
+
+        .error {
+            text-align: center;
+            padding: 20px;
+            color: #e74c3c;
+        }
     </style>
 </head>
 <body>
@@ -257,6 +270,9 @@
 
         // 加载Markdown文件
         async function loadMarkdownContent() {
+            const content = document.getElementById('markdown-content');
+            content.innerHTML = '<div class="loading">正在加载内容...</div>';
+
             try {
                 const file = getQueryParam('file') || './增长思维/00.md';
                 let articleTitle = getQueryParam('title');
@@ -267,10 +283,6 @@
                 }
                 
                 const markdownContent = await response.text();
-                const content = document.getElementById('markdown-content');
-                
-                // 先显示加载提示
-                content.innerHTML = '<p>正在加载内容...</p>';
                 
                 // 使用 Promise 确保内容渲染完成
                 await new Promise(resolve => {
@@ -300,8 +312,7 @@
 
             } catch (error) {
                 console.error('Error loading markdown:', error);
-                document.getElementById('markdown-content').innerHTML = 
-                    '<p>加载文章内容失败，请稍后重试。</p>';
+                content.innerHTML = '<p class="error">加载文章内容失败，请稍后重试。</p>';
             }
         }
 
@@ -382,7 +393,8 @@
                 }
 
                 const content = document.getElementById('markdown-content');
-                content.innerHTML = '<p>正在加载内容...</p>';
+                // 移除加载提示，直接更新内容
+                content.innerHTML = '';
                 this.currentPage = pageNum;
 
                 this.pages[pageNum].forEach(element => {
