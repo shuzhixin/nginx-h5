@@ -231,6 +231,63 @@
             padding: 20px;
             color: #e74c3c;
         }
+
+        /* 图片样式 */
+        .markdown-body img {
+            max-width: 100%;
+            height: auto;
+            display: block;
+            margin: 10px auto;
+            border-radius: 4px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        /* 图片容器样式 */
+        .markdown-body p:has(img) {
+            text-align: center;
+            margin: 20px 0;
+        }
+
+        /* 大图查看样式 */
+        .markdown-body img {
+            cursor: pointer;
+            transition: transform 0.3s ease;
+        }
+
+        .markdown-body img:hover {
+            transform: scale(1.02);
+        }
+
+        /* 图片加载占位符 */
+        .img-placeholder {
+            background: #f5f5f5;
+            min-height: 100px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #999;
+            margin: 10px 0;
+            border-radius: 4px;
+        }
+
+        /* 全屏图片样式 */
+        .markdown-body img.fullscreen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            width: 100vw;
+            height: 100vh;
+            object-fit: contain;
+            z-index: 9999;
+            background: rgba(0, 0, 0, 0.9);
+            margin: 0;
+            padding: 20px;
+            box-sizing: border-box;
+            border-radius: 0;
+            box-shadow: none;
+        }
     </style>
 </head>
 <body>
@@ -343,6 +400,50 @@
                 this.containerHeight = window.innerHeight - 200; // 减去控制栏高度
             }
 
+            // 修改图片加载处理方法
+            async waitForImages(container) {
+                const images = container.getElementsByTagName('img');
+                if (images.length === 0) return;
+
+                const imagePromises = Array.from(images).map(img => {
+                    return new Promise((resolve) => {
+                        // 为每个图片添加加载占位符
+                        const placeholder = document.createElement('div');
+                        placeholder.className = 'img-placeholder';
+                        placeholder.textContent = '图片加载中...';
+                        img.parentNode.insertBefore(placeholder, img);
+
+                        if (img.complete && img.naturalHeight !== 0) {
+                            placeholder.remove();
+                            resolve();
+                        } else {
+                            img.onload = () => {
+                                placeholder.remove();
+                                resolve();
+                            };
+                            img.onerror = () => {
+                                placeholder.textContent = '图片加载失败';
+                                resolve();
+                            };
+                            // 设置超时
+                            setTimeout(() => {
+                                if (!img.complete) {
+                                    placeholder.textContent = '图片加载超时';
+                                    resolve();
+                                }
+                            }, 10000); // 10秒超时
+                        }
+                    });
+                });
+
+                try {
+                    await Promise.all(imagePromises);
+                } catch (error) {
+                    console.warn('Some images failed to load:', error);
+                }
+            }
+
+            // 修改 initPages 方法
             async initPages(retryCount = 3) {
                 for (let i = 0; i < retryCount; i++) {
                     try {
@@ -353,66 +454,113 @@
                         container.innerHTML = this.content;
                         document.body.appendChild(container);
 
+                        // 等待图片加载完成
+                        await this.waitForImages(container);
+
+                        // 确保所有元素都已渲染完成
+                        await new Promise(resolve => setTimeout(resolve, 100));
+
                         const elements = Array.from(container.children);
+                        this.pages = [];
                         let currentPage = [];
                         let currentHeight = 0;
 
-                        elements.forEach(element => {
-                            const height = element.offsetHeight;
-                            if (currentHeight + height > this.containerHeight) {
+                        for (const element of elements) {
+                            if (!element) continue; // 跳过空元素
+
+                            const height = element.offsetHeight || 0;
+                            const isImage = element.tagName === 'IMG' || element.querySelector('img');
+                            
+                            // 处理图片元素
+                            if (isImage) {
                                 if (currentPage.length > 0) {
-                                    this.pages.push(currentPage);
+                                    this.pages.push([...currentPage]);
                                     currentPage = [];
                                     currentHeight = 0;
                                 }
+                                this.pages.push([element.cloneNode(true)]);
+                                continue;
                             }
+
+                            // 处理普通元素
+                            if (currentHeight + height > this.containerHeight) {
+                                if (currentPage.length > 0) {
+                                    this.pages.push([...currentPage]);
+                                    currentPage = [];
+                                    currentHeight = 0;
+                                }
+                                // 如果单个元素高度超过容器高度
+                                if (height > this.containerHeight) {
+                                    this.pages.push([element.cloneNode(true)]);
+                                    continue;
+                                }
+                            }
+
                             currentPage.push(element.cloneNode(true));
                             currentHeight += height;
-                        });
-
-                        if (currentPage.length > 0) {
-                            this.pages.push(currentPage);
                         }
 
+                        // 处理最后一页
+                        if (currentPage.length > 0) {
+                            this.pages.push([...currentPage]);
+                        }
+
+                        // 清理临时容器
                         document.body.removeChild(container);
 
-                        return; // 成功则返回
+                        // 确保至少有一页内容
+                        if (this.pages.length === 0) {
+                            console.warn('No pages created, adding empty page');
+                            this.pages.push([document.createElement('div')]);
+                        }
+
+                        console.log(`Created ${this.pages.length} pages`);
+                        return true;
+
                     } catch (e) {
                         console.warn(`Init pages attempt ${i + 1} failed:`, e);
-                        // 最后一次尝试失败才抛出错误
                         if (i === retryCount - 1) throw e;
-                        // 等待一段时间后重试
                         await new Promise(resolve => setTimeout(resolve, 100 * (i + 1)));
                     }
                 }
             }
 
             showPage(pageNum) {
+                console.log(`Attempting to show page ${pageNum}`);
                 if (pageNum < 0 || pageNum >= this.pages.length) {
+                    console.warn(`Invalid page number: ${pageNum}`);
                     return false;
                 }
 
-                const content = document.getElementById('markdown-content');
-                // 移除加载提示，直接更新内容
-                content.innerHTML = '';
-                this.currentPage = pageNum;
+                try {
+                    const content = document.getElementById('markdown-content');
+                    content.innerHTML = '';
 
-                this.pages[pageNum].forEach(element => {
-                    content.appendChild(element.cloneNode(true));
-                });
+                    this.pages[pageNum].forEach(element => {
+                        if (element) {
+                            content.appendChild(element.cloneNode(true));
+                        }
+                    });
 
-                document.getElementById('page-info').textContent = 
-                    `第 ${pageNum + 1} 页 / 共 ${this.pages.length} 页`;
+                    this.currentPage = pageNum;
 
-                // 更新按钮状态
-                document.getElementById('prev-page').disabled = pageNum === 0;
-                document.getElementById('next-page').disabled = pageNum === this.pages.length - 1;
+                    // 更新页面信息
+                    document.getElementById('page-info').textContent = 
+                        `第 ${pageNum + 1} 页 / 共 ${this.pages.length} 页`;
 
-                // 保存阅读进度
-                const file = getQueryParam('file');
-                ReadingProgress.save(file, '', pageNum);
+                    // 更新按钮状态
+                    document.getElementById('prev-page').disabled = pageNum === 0;
+                    document.getElementById('next-page').disabled = pageNum === this.pages.length - 1;
 
-                return true;
+                    // 保存阅读进度
+                    const file = getQueryParam('file');
+                    ReadingProgress.save(file, '', pageNum);
+
+                    return true;
+                } catch (error) {
+                    console.error('Error showing page:', error);
+                    return false;
+                }
             }
         }
 
@@ -496,7 +644,9 @@
         // 初始化页面
         async function initReader() {
             try {
+                console.log('Initializing reader...');
                 const content = document.getElementById('markdown-content');
+                
                 if (!content) {
                     throw new Error('Content element not found');
                 }
@@ -509,26 +659,22 @@
                 // 初始化页面管理器
                 window.pageManager = new PageManager(htmlContent);
                 
-                // 使用 Promise 包装初始化过程
-                await new Promise((resolve, reject) => {
-                    try {
-                        window.pageManager.initPages();
-                        resolve();
-                    } catch (e) {
-                        reject(e);
-                    }
-                });
+                // 初始化页面
+                await window.pageManager.initPages();
                 
                 // 加载上次阅读进度
                 const progress = ReadingProgress.load();
                 const file = getQueryParam('file');
                 
-                const showPageResult = progress && progress.bookId === file ? 
-                    window.pageManager.showPage(progress.page) :
-                    window.pageManager.showPage(0);
-                    
-                if (!showPageResult) {
-                    throw new Error('Failed to display page');
+                // 显示页面
+                let pageToShow = 0;
+                if (progress && progress.bookId === file) {
+                    pageToShow = progress.page;
+                }
+                
+                const showResult = window.pageManager.showPage(pageToShow);
+                if (!showResult) {
+                    throw new Error('Failed to display initial page');
                 }
 
                 // 初始化控制器
@@ -537,9 +683,11 @@
                 // 添加触摸支持
                 new TouchHandler(window.pageManager);
 
+                console.log('Reader initialized successfully');
+                
             } catch (error) {
-                console.error('Error initializing reader:', error);
-                throw error; // 向上传递错误
+                console.error('Reader initialization failed:', error);
+                throw error;
             }
         }
 
@@ -571,16 +719,14 @@
                     // 然后加载内容
                     await loadMarkdownContent();
                 } catch (error) {
-                    console.error('Initialization failed:', error);
-                    document.getElementById('markdown-content').innerHTML = 
-                        '<p>初始化失败，请刷新页面重试。<br>错误信息：' + error.message + '</p>';
+                    console.error('Initialization error:', error);
                 }
             };
-            
+
             init();
         });
 
-        // Touch 事件处理类
+        // 在 PageManager 类后，initReader 函数前添加以下代码
         class TouchHandler {
             constructor(pageManager) {
                 this.pageManager = pageManager;
@@ -599,6 +745,8 @@
                 }, { passive: true });
 
                 content.addEventListener('touchend', (e) => {
+                    if (e.changedTouches.length === 0) return;
+                    
                     const endX = e.changedTouches[0].clientX;
                     const endY = e.changedTouches[0].clientY;
                     
@@ -606,9 +754,7 @@
                     const diffY = Math.abs(this.startY - endY);
                     
                     // 确保是水平滑动而不是垂直滚动
-                    if (Math.abs(diffX) > this.threshold && Math.abs(diffX) > diffY) {
-                        e.preventDefault(); // 防止触发其他事件
-                        
+                    if (Math.abs(diffX) > this.threshold && Math.abs(diffX) > diffY * 2) {
                         if (diffX > 0) {
                             // 向左滑动，下一页
                             this.pageManager.showPage(this.pageManager.currentPage + 1);
@@ -617,7 +763,16 @@
                             this.pageManager.showPage(this.pageManager.currentPage - 1);
                         }
                     }
-                }, { passive: true });
+                });
+
+                // 禁用双击缩放
+                content.addEventListener('touchend', (e) => {
+                    const now = Date.now();
+                    if (now - this.lastTouch < 300) {
+                        e.preventDefault();
+                    }
+                    this.lastTouch = now;
+                }, { passive: false });
             }
         }
     </script>
