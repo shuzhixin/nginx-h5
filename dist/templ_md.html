@@ -258,7 +258,6 @@
         // 加载Markdown文件
         async function loadMarkdownContent() {
             try {
-                // 获取文章编号参数
                 const file = getQueryParam('file') || './增长思维/00.md';
                 let articleTitle = getQueryParam('title');
                 const response = await fetch(file);
@@ -270,18 +269,22 @@
                 const markdownContent = await response.text();
                 
                 // 解析并显示Markdown内容
-                document.getElementById('markdown-content').innerHTML = 
-                    marked.parse(markdownContent);
+                document.getElementById('markdown-content').innerHTML = marked.parse(markdownContent);
 
                 // 更新页面标题
                 if(!articleTitle){
                     const titleMatch = markdownContent.match(/^#\s+(.+)$/m);
                     articleTitle = titleMatch ? titleMatch[1] : '增长思维';
-                    
                 }
                 if (articleTitle) {
-                        document.title = articleTitle;
-                    }
+                    document.title = articleTitle;
+                }
+
+                // 等待内容渲染完成后再初始化阅读器
+                setTimeout(() => {
+                    initReader();
+                }, 500); // 增加到 500ms
+
             } catch (error) {
                 console.error('Error loading markdown:', error);
                 document.getElementById('markdown-content').innerHTML = 
@@ -354,7 +357,7 @@
                 }
 
                 const content = document.getElementById('markdown-content');
-                content.innerHTML = '';
+                content.innerHTML = '<p>正在加载内容...</p>';
                 this.currentPage = pageNum;
 
                 this.pages[pageNum].forEach(element => {
@@ -456,15 +459,8 @@
         // 初始化页面
         async function initReader() {
             try {
-                const file = getQueryParam('file') || './增长思维/00.md';
-                const response = await fetch(file);
-                
-                if (!response.ok) {
-                    throw new Error('Failed to load markdown content');
-                }
-                
-                const markdownContent = await response.text();
-                const htmlContent = marked.parse(markdownContent);
+                const content = document.getElementById('markdown-content');
+                const htmlContent = content.innerHTML;
                 
                 // 初始化页面管理器
                 window.pageManager = new PageManager(htmlContent);
@@ -472,6 +468,7 @@
                 
                 // 加载上次阅读进度
                 const progress = ReadingProgress.load();
+                const file = getQueryParam('file');
                 if (progress && progress.bookId === file) {
                     window.pageManager.showPage(progress.page);
                 } else {
@@ -479,76 +476,44 @@
                 }
 
                 // 绑定翻页事件
-                document.getElementById('prev-page').addEventListener('click', () => {
-                    window.pageManager.showPage(window.pageManager.currentPage - 1);
-                });
+                initPageControls();
                 
-                document.getElementById('next-page').addEventListener('click', () => {
-                    window.pageManager.showPage(window.pageManager.currentPage + 1);
-                });
-
-                // 支持键盘翻页
-                document.addEventListener('keydown', (e) => {
-                    if (e.key === 'ArrowLeft') {
-                        window.pageManager.showPage(window.pageManager.currentPage - 1);
-                    } else if (e.key === 'ArrowRight') {
-                        window.pageManager.showPage(window.pageManager.currentPage + 1);
-                    }
-                });
-
-                // 添加触摸事件支持
-                class TouchHandler {
-                    constructor(pageManager) {
-                        this.pageManager = pageManager;
-                        this.startX = 0;
-                        this.startY = 0;
-                        this.init();
-                    }
-
-                    init() {
-                        document.addEventListener('touchstart', (e) => {
-                            this.startX = e.touches[0].clientX;
-                            this.startY = e.touches[0].clientY;
-                        }, false);
-
-                        document.addEventListener('touchend', (e) => {
-                            const endX = e.changedTouches[0].clientX;
-                            const endY = e.changedTouches[0].clientY;
-                            
-                            const diffX = this.startX - endX;
-                            const diffY = this.startY - endY;
-
-                            // 确保是水平滑动而不是垂直滚动
-                            if (Math.abs(diffX) > Math.abs(diffY) && Math.abs(diffX) > 50) {
-                                if (diffX > 0) {
-                                    // 向左滑动，下一页
-                                    this.pageManager.showPage(this.pageManager.currentPage + 1);
-                                } else {
-                                    // 向右滑动，上一页
-                                    this.pageManager.showPage(this.pageManager.currentPage - 1);
-                                }
-                            }
-                        }, false);
-                    }
-                }
-
                 // 添加触摸支持
                 new TouchHandler(window.pageManager);
 
             } catch (error) {
-                console.error('Error:', error);
+                console.error('Error initializing reader:', error);
                 document.getElementById('markdown-content').innerHTML = 
-                    '<p>加载文章内容失败，请稍后重试。</p>';
+                    '<p>初始化阅读器失败，请刷新页面重试。</p>';
             }
         }
 
-        // 页面加载时执行
-        loadMarkdownContent();
-        // 先初始化主题管理
-        ThemeManager.init();
+        // 抽离翻页控制初始化
+        function initPageControls() {
+            document.getElementById('prev-page').addEventListener('click', () => {
+                window.pageManager.showPage(window.pageManager.currentPage - 1);
+            });
+            
+            document.getElementById('next-page').addEventListener('click', () => {
+                window.pageManager.showPage(window.pageManager.currentPage + 1);
+            });
 
-        // 等待 DOM 加载完成后初始化阅读器
-        document.addEventListener('DOMContentLoaded', initReader);
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'ArrowLeft') {
+                    window.pageManager.showPage(window.pageManager.currentPage - 1);
+                } else if (e.key === 'ArrowRight') {
+                    window.pageManager.showPage(window.pageManager.currentPage + 1);
+                }
+            });
+        }
+
+        // 修改页面加载执行顺序
+        document.addEventListener('DOMContentLoaded', () => {
+            // 先初始化主题管理
+            ThemeManager.init();
+            // 然后加载内容
+            loadMarkdownContent();
+        });
     </script>
 </body>
 </html>
